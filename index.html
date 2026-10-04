@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>三杯猜球大挑戰</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: #1e272e;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            background: #2c3e50;
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            text-align: center;
+            max-width: 500px;
+            width: 100%;
+        }
+
+        h1 {
+            font-size: 26px;
+            margin-bottom: 10px;
+            color: #f1c40f;
+        }
+
+        .status-bar {
+            display: flex;
+            justify-content: space-around;
+            margin: 15px 0 25px;
+            font-size: 16px;
+            background: rgba(0,0,0,0.2);
+            padding: 10px;
+            border-radius: 10px;
+        }
+
+        .stage {
+            position: relative;
+            height: 200px;
+            margin: 20px 0;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+        }
+
+        .cup-container {
+            position: absolute;
+            bottom: 30px;
+            width: 90px;
+            height: 110px;
+            transition: left 0.3s ease-in-out, transform 0.4s ease;
+            cursor: pointer;
+        }
+
+        /* 杯子造型 */
+        .cup {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            border-radius: 15px 15px 5px 5px;
+            position: relative;
+            box-shadow: 0 8px 15px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            font-weight: bold;
+            color: rgba(255,255,255,0.8);
+            border-top: 6px solid #f39c12;
+            z-index: 2;
+        }
+
+        .cup-container.lifted {
+            transform: translateY(-70px);
+        }
+
+        /* 紅色小球 */
+        .ball {
+            position: absolute;
+            bottom: 35px;
+            width: 36px;
+            height: 36px;
+            background: radial-gradient(circle at 10px 10px, #f1c40f, #f39c12);
+            border-radius: 50%;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+            z-index: 1;
+            transition: left 0.3s ease-in-out;
+        }
+
+        .table-line {
+            width: 100%;
+            height: 8px;
+            background: #7f8c8d;
+            border-radius: 4px;
+            position: absolute;
+            bottom: 22px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            background-color: #27ae60;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s, transform 0.1s;
+        }
+
+        .btn:hover { background-color: #2ec771; }
+        .btn:disabled { background-color: #7f8c8d; cursor: not-allowed; }
+
+        .btn-voice {
+            background-color: #e67e22;
+        }
+        .btn-voice:hover { background-color: #d35400; }
+
+        .message {
+            margin-top: 15px;
+            font-size: 18px;
+            font-weight: bold;
+            min-height: 27px;
+        }
+
+        .win { color: #2ecc71; }
+        .lose { color: #e74c3c; }
+        .info { color: #3498db; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>三杯猜球大挑戰</h1>
+    <p style="font-size:14px; color:#bdc3c7;">觀察球被放入哪個杯子，洗牌停止後點擊或說出答案！</p>
+    
+    <div class="status-bar">
+        <div>總局數：<span id="total-games">0</span></div>
+        <div>勝場：<span id="wins">0</span></div>
+        <div>勝率：<span id="win-rate">0%</span></div>
+    </div>
+
+    <div class="stage">
+        <div class="ball" id="ball"></div>
+        <div class="cup-container" id="cup-0" onclick="selectCup(0)">
+            <div class="cup">1號</div>
+        </div>
+        <div class="cup-container" id="cup-1" onclick="selectCup(1)">
+            <div class="cup">2號</div>
+        </div>
+        <div class="cup-container" id="cup-2" onclick="selectCup(2)">
+            <div class="cup">3號</div>
+        </div>
+        <div class="table-line"></div>
+    </div>
+
+    <div class="controls">
+        <button class="btn" id="start-btn" onclick="startGame()">開始洗牌</button>
+        <button class="btn btn-voice" id="voice-btn" onclick="startVoiceRecognition()" disabled>🎤 語音回答</button>
+    </div>
+
+    <div class="message" id="message">請點擊「開始洗牌」</div>
+</div>
+
+<script>
+    const positions = [60, 200, 340]; // 三個杯子的 X 座標 (像素)
+    let cupState = [0, 1, 2]; // 當前 0, 1, 2 位置上對應的是哪一個杯子
+    let ballPosition = 1; // 球當前隱藏在幾號位置 (0:左, 1:中, 2:右)
+    let isPlaying = false;
+    let canGuess = false;
+
+    let totalGames = 0;
+    let wins = 0;
+
+    function updateCupPositions() {
+        for (let posIndex = 0; posIndex < 3; posIndex++) {
+            const cupId = cupState[posIndex];
+            const cupEl = document.getElementById(`cup-${cupId}`);
+            cupEl.style.left = `${positions[posIndex]}px`;
+        }
+    }
+
+    function setBallPosition(posIndex) {
+        const ball = document.getElementById('ball');
+        ball.style.left = `${positions[posIndex] + 27}px`;
+    }
+
+    function liftAllCups(lift) {
+        for (let i = 0; i < 3; i++) {
+            const cup = document.getElementById(`cup-${i}`);
+            if (lift) cup.classList.add('lifted');
+            else cup.classList.remove('lifted');
+        }
+    }
+
+    function initGame() {
+        cupState = [0, 1, 2];
+        updateCupPositions();
+        ballPosition = Math.floor(Math.random() * 3);
+        setBallPosition(ballPosition);
+        liftAllCups(true);
+    }
+
+    async function startGame() {
+        if (isPlaying) return;
+        isPlaying = true;
+        canGuess = false;
+
+        document.getElementById('start-btn').disabled = true;
+        document.getElementById('voice-btn').disabled = true;
+        document.getElementById('message').textContent = '仔細看好球的位置...';
+        document.getElementById('message').className = 'message info';
+
+        // 重新選擇球的位置並展現
+        ballPosition = Math.floor(Math.random() * 3);
+        setBallPosition(ballPosition);
+        liftAllCups(true);
+
+        await sleep(1500);
+
+        // 蓋上杯子
+        liftAllCups(false);
+        await sleep(600);
+
+        // 開始洗牌
+        document.getElementById('message').textContent = '洗牌中...';
+        const shuffleCount = 8; // 洗牌交換次數
+        for (let i = 0; i < shuffleCount; i++) {
+            swapRandomCups();
+            await sleep(350);
+        }
+
+        // 洗牌完成
+        canGuess = true;
+        document.getElementById('message').textContent = '請點擊杯子或按下「語音回答」說出（1號、2號或3號）';
+        document.getElementById('voice-btn').disabled = false;
+    }
+
+    function swapRandomCups() {
+        let idx1 = Math.floor(Math.random() * 3);
+        let idx2 = Math.floor(Math.random() * 3);
+        while (idx1 === idx2) {
+            idx2 = Math.floor(Math.random() * 3);
+        }
+
+        // 如果球在這兩個對調的杯子之一，球也要跟著搬移
+        if (ballPosition === idx1) ballPosition = idx2;
+        else if (ballPosition === idx2) ballPosition = idx1;
+
+        // 交換杯子狀態
+        const temp = cupState[idx1];
+        cupState[idx1] = cupState[idx2];
+        cupState[idx2] = temp;
+
+        updateCupPositions();
+        setBallPosition(ballPosition);
+    }
+
+    function selectCup(cupId) {
+        if (!canGuess) return;
+        canGuess = false;
+        document.getElementById('voice-btn').disabled = true;
+
+        // 找出玩家點擊的杯子當前在哪個位置
+        const currentPos = cupState.indexOf(cupId);
+
+        liftAllCups(true);
+
+        totalGames++;
+        if (currentPos === ballPosition) {
+            wins++;
+            document.getElementById('message').textContent = `🎉 恭喜答對了！球就在 ${currentPos + 1} 號位置！`;
+            document.getElementById('message').className = 'message win';
+        } else {
+            document.getElementById('message').textContent = `❌ 猜錯囉！球其實在 ${ballPosition + 1} 號位置。`;
+            document.getElementById('message').className = 'message lose';
+        }
+
+        updateStats();
+        isPlaying = false;
+        document.getElementById('start-btn').disabled = false;
+    }
+
+    function updateStats() {
+        document.getElementById('total-games').textContent = totalGames;
+        document.getElementById('wins').textContent = wins;
+        const rate = totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0;
+        document.getElementById('win-rate').textContent = `${rate}%`;
+    }
+
+    // 語音辨識支援 (SpeechRecognition)
+    function startVoiceRecognition() {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            alert('您的瀏覽器不支援語音辨識功能，請直接使用點擊方式。');
+            return;
+        }
+
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'zh-TW';
+        recognition.interimResults = false;
+
+        document.getElementById('message').textContent = '🎙️ 請說話...（例如說出："1號"、"2" 或 "中間"）';
+
+        recognition.start();
+
+        recognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript;
+            document.getElementById('message').textContent = `辨識到的語音："${transcript}"`;
+
+            let guessedPos = -1;
+            if (transcript.includes('1') || transcript.includes('一') || transcript.includes('左')) guessedPos = 0;
+            else if (transcript.includes('2') || transcript.includes('二') || transcript.includes('中')) guessedPos = 1;
+            else if (transcript.includes('3') || transcript.includes('三') || transcript.includes('右')) guessedPos = 2;
+
+            if (guessedPos !== -1) {
+                const cupId = cupState[guessedPos];
+                selectCup(cupId);
+            } else {
+                document.getElementById('message').textContent = `無法辨識位置："${transcript}"，請再試一次或直接點擊。`;
+            }
+        };
+
+        recognition.onerror = () => {
+            document.getElementById('message').textContent = '語音辨識失敗，請再試一次或直接點擊杯子。';
+        };
+    }
+
+    function sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    // 初始初始化
+    initGame();
+</script>
+
+</body>
+</html>
